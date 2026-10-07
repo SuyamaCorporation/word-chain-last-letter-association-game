@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Chain – Last-Letter Association</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: linear-gradient(135deg, #2d1b69 0%, #4c1d95 50%, #6d28d9 100%); min-height: 100vh; }
+  @keyframes flash { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .flash { animation: flash 0.4s ease-in-out 2; }
+  #timerBar { transition: width 0.1s linear; }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+<div class="w-full max-w-xl">
+  <div class="text-center mb-4">
+    <h1 class="text-3xl font-bold text-white mb-1">Word Chain</h1>
+    <p class="text-violet-300 text-sm">Connect words by their last letter</p>
+  </div>
+
+  <!-- Settings Bar -->
+  <div class="bg-white/10 rounded-xl p-3 mb-4 flex flex-wrap gap-3 items-center justify-between">
+    <div class="flex gap-2 items-center">
+      <label for="modeSelect" class="text-violet-200 text-sm">Mode:</label>
+      <select id="modeSelect" class="bg-violet-800 text-white text-sm rounded px-2 py-1 border border-violet-500">
+        <option value="all">All Words</option>
+        <option value="animals">Animals Only</option>
+        <option value="foods">Foods Only</option>
+      </select>
+    </div>
+    <div class="flex gap-2 items-center">
+      <label for="playersSelect" class="text-violet-200 text-sm">Players:</label>
+      <select id="playersSelect" class="bg-violet-800 text-white text-sm rounded px-2 py-1 border border-violet-500">
+        <option value="1">1 Player</option>
+        <option value="2">2 Players</option>
+      </select>
+    </div>
+    <button id="startBtn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold px-4 py-1 rounded-lg transition text-sm">New Game</button>
+  </div>
+
+  <!-- Player Indicator -->
+  <div id="playerIndicator" class="text-center text-lg font-bold text-yellow-300 mb-2 h-6"></div>
+
+  <!-- Current Word -->
+  <div class="bg-white/10 rounded-xl p-4 mb-4 text-center">
+    <div class="text-xs text-violet-300 mb-1">Current Word</div>
+    <div id="currentWord" class="text-4xl font-bold text-white tracking-widest">—</div>
+    <div class="text-violet-300 text-sm mt-1">Next must start with: <span id="nextLetter" class="text-yellow-300 font-bold text-lg">—</span></div>
+  </div>
+
+  <!-- Timer Bar -->
+  <div class="bg-white/10 rounded-full h-4 mb-4 overflow-hidden" role="progressbar" aria-label="Time remaining" aria-valuemin="0" aria-valuemax="100" id="timerBarContainer">
+    <div id="timerBar" class="h-full bg-gradient-to-r from-violet-400 to-pink-500 w-full rounded-full"></div>
+  </div>
+  <div class="text-center text-violet-300 text-sm mb-4"><span id="timerText">6.0</span>s remaining</div>
+
+  <!-- Input -->
+  <div class="flex gap-2 mb-4">
+    <label for="wordInput" class="sr-only">Your word</label>
+    <input id="wordInput" type="text" placeholder="Type your word..." autocomplete="off" autocorrect="off" spellcheck="false"
+      class="flex-1 bg-white/10 border border-violet-500 text-white placeholder-violet-400 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-400">
+    <button id="submitBtn" class="bg-violet-600 hover:bg-violet-500 text-white font-bold px-6 py-3 rounded-lg transition" aria-label="Submit word">Submit</button>
+  </div>
+
+  <!-- Feedback -->
+  <div id="feedback" class="text-center font-bold text-lg h-7 mb-4"></div>
+
+  <!-- Stats Row -->
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="bg-white/10 rounded-xl p-3 text-center">
+      <div class="text-xs text-violet-300">Chain</div>
+      <div id="chainDisplay" class="text-2xl font-bold text-white">0</div>
+    </div>
+    <div class="bg-white/10 rounded-xl p-3 text-center">
+      <div class="text-xs text-violet-300">Best</div>
+      <div id="bestDisplay" class="text-2xl font-bold text-yellow-300">0</div>
+    </div>
+    <div class="bg-white/10 rounded-xl p-3 text-center">
+      <div class="text-xs text-violet-300">Score</div>
+      <div id="scoreDisplay" class="text-2xl font-bold text-green-300">0</div>
+    </div>
+  </div>
+
+  <!-- Word History -->
+  <div class="bg-white/10 rounded-xl p-3 max-h-32 overflow-y-auto">
+    <div class="text-xs text-violet-300 mb-2">Chain History</div>
+    <div id="wordHistory" class="flex flex-wrap gap-1 text-sm"></div>
+  </div>
+</div>
+
+<script>
+// ── escapeHtml ─────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Dictionaries ───────────────────────────────────────────────────────────
+const WORDS_ALL = ['apple','ant','tiger','rabbit','eagle','elephant','lion','nose','ear','ring','game','ever','red','dog','goat','tree','eagle','elk','kangaroo','octopus','sun','night','table','elephant','nest','top','pencil','lamp','paper','rain','noon','net','ten','narrow','woman','man','nail','lemon','moon','now','wall','love','end','dog','gap','pen','name','eagle','leg','green','neck','key','yellow','wall','ball','lamp','post','tall','list','test','star','ring','game','map','path','hat','tan','nurse','eye','yes','sea','ant','tree','energy','yellow','watch','hat','town','near','ring','go','odd','dance','ear','red','deer','run','net','ten','twist','tan','note','end','dim','man','nun','now','wolf','fan','now','walk','knee','egg','gap','pin','new','wing','gun','new','wear','road','door','run','note','earn','neck','knee','egg','girl','lip','pool','lake','eagle','arm','map','path','head','door','rut','top','pen','now','well','lane','earn','now','deer','run','night','tell','live','ear','red','day','yes','sun','nail','lamp','pen','now','wall','love','end','dog','girl','leg','gap','pen'];
+const WORDS_ANIMALS = ['ant','tiger','rabbit','eagle','elephant','lion','elk','kangaroo','octopus','dog','goat','cat','rat','toad','deer','owl','wolf','bear','emu','yak','gnu','newt','frog','gull','llama','alpaca','anaconda','albatross','bison','crane','cobra','dingo','falcon','gecko','hippo','iguana','jaguar','koala','lynx','mole','narwhal','orca','panther','quail','raven','shark','tapir','toucan','viper','walrus','xerus','zebra','axolotl','lemur','mink','newt','otter','panda','robin','stork','tern','urchin','vole','wren','yak','zebu'];
+const WORDS_FOODS = ['apple','avocado','almond','anchovy','artichoke','asparagus','basil','banana','bean','beef','beet','bread','broccoli','butter','cake','carrot','cheese','cherry','chicken','chili','clam','cocoa','corn','crab','cream','curry','date','egg','fig','garlic','grape','ham','honey','kale','kiwi','lamb','lemon','lime','lobster','mango','melon','milk','mint','mushroom','noodle','nut','oat','olive','onion','orange','oyster','papaya','pasta','peach','pear','pepper','pie','pineapple','plum','pork','potato','prawn','quince','rice','salmon','shrimp','spinach','steak','sugar','tofu','tomato','tuna','turkey','veal','waffle','walnut','yam','yogurt','zucchini'];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let currentWord, usedWords, chainLength, score, playerTurn, numPlayers, timerInterval, timeLeft, mode, gameActive;
+const TIMER_MAX = 6.0;
+
+function getWordList() {
+  if (mode === 'animals') return WORDS_ANIMALS;
+  if (mode === 'foods') return WORDS_FOODS;
+  return WORDS_ALL;
+}
+
+function isValidWord(w) {
+  const list = getWordList();
+  return list.includes(w.toLowerCase());
+}
+
+function startGame() {
+  clearInterval(timerInterval);
+  mode = document.getElementById('modeSelect').value;
+  numPlayers = parseInt(document.getElementById('playersSelect').value);
+  usedWords = new Set();
+  chainLength = 0;
+  score = 0;
+  playerTurn = 1;
+  gameActive = true;
+
+  const list = getWordList();
+  const seed = list[Math.floor(Math.random() * list.length)];
+  currentWord = seed;
+  usedWords.add(seed);
+
+  document.getElementById('currentWord').textContent = seed.toUpperCase();
+  document.getElementById('nextLetter').textContent = seed.slice(-1).toUpperCase();
+  document.getElementById('wordHistory').innerHTML = `<span class="bg-violet-700 text-white px-2 py-0.5 rounded">${escapeHtml(seed)}</span>`;
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('wordInput').value = '';
+  document.getElementById('wordInput').disabled = false;
+  updateStats();
+  updatePlayerIndicator();
+  startTimer();
+}
+
+function updatePlayerIndicator() {
+  const el = document.getElementById('playerIndicator');
+  if (numPlayers === 2) {
+    el.textContent = `Player ${playerTurn}'s Turn`;
+    el.className = `text-center text-lg font-bold mb-2 h-6 ${playerTurn === 1 ? 'text-cyan-300' : 'text-pink-300'}`;
+  } else {
+    el.textContent = '';
+  }
+}
+
+function startTimer() {
+  timeLeft = TIMER_MAX;
+  updateTimerUI();
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft -= 0.1;
+    updateTimerUI();
+    if (timeLeft <= 0) { clearInterval(timerInterval); timeoutLoss(); }
+  }, 100);
+}
+
+function updateTimerUI() {
+  const pct = Math.max(0, (timeLeft / TIMER_MAX) * 100);
+  document.getElementById('timerBar').style.width = pct + '%';
+  document.getElementById('timerText').textContent = Math.max(0, timeLeft).toFixed(1);
+  const bar = document.getElementById('timerBar');
+  if (pct > 50) bar.className = 'h-full bg-gradient-to-r from-violet-400 to-pink-500 w-full rounded-full';
+  else if (pct > 20) bar.className = 'h-full bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full';
+  else bar.className = 'h-full bg-red-500 rounded-full';
+}
+
+function timeoutLoss() {
+  gameActive = false;
+  document.getElementById('wordInput').disabled = true;
+  const loser = numPlayers === 2 ? `Player ${playerTurn} timed out!` : 'Time\'s up!';
+  showFeedback(loser + ' Chain ended at ' + chainLength, 'text-red-400');
+  checkBest();
+}
+
+function submitWord() {
+  if (!gameActive) return;
+  const inp = document.getElementById('wordInput');
+  const word = inp.value.trim().toLowerCase();
+  inp.value = '';
+
+  if (word.length < 3) { showFeedback('Word must be at least 3 letters', 'text-yellow-400'); return; }
+
+  const required = currentWord.slice(-1).toLowerCase();
+  if (word[0] !== required) {
+    showFeedback(`Must start with "${required.toUpperCase()}"`, 'text-red-400');
+    return;
+  }
+  if (usedWords.has(word)) { showFeedback('Word already used!', 'text-red-400'); return; }
+  if (!isValidWord(word)) { showFeedback('Word not in dictionary', 'text-red-400'); return; }
+
+  // Accept
+  usedWords.add(word);
+  chainLength++;
+  score += word.length * Math.ceil(timeLeft);
+  currentWord = word;
+
+  document.getElementById('currentWord').textContent = word.toUpperCase();
+  document.getElementById('nextLetter').textContent = word.slice(-1).toUpperCase();
+  const hist = document.getElementById('wordHistory');
+  const colors = ['bg-violet-700','bg-purple-700','bg-indigo-700','bg-fuchsia-700'];
+  const span = document.createElement('span');
+  span.className = colors[chainLength % colors.length] + ' text-white px-2 py-0.5 rounded';
+  span.textContent = word;
+  hist.appendChild(span);
+  hist.scrollTop = hist.scrollHeight;
+
+  showFeedback(`+${word.length * Math.ceil(timeLeft)} pts!`, 'text-green-400');
+  updateStats();
+
+  // Switch player
+  if (numPlayers === 2) { playerTurn = playerTurn === 1 ? 2 : 1; updatePlayerIndicator(); }
+  startTimer();
+}
+
+function showFeedback(msg, cls) {
+  const el = document.getElementById('feedback');
+  el.textContent = msg;
+  el.className = `text-center font-bold text-lg h-7 mb-4 flash ${cls}`;
+  setTimeout(() => { el.className = `text-center font-bold text-lg h-7 mb-4 ${cls}`; }, 800);
+}
+
+function updateStats() {
+  document.getElementById('chainDisplay').textContent = chainLength;
+  document.getElementById('scoreDisplay').textContent = score;
+  checkBest();
+}
+
+function checkBest() {
+  const best = parseInt(localStorage.getItem('wordchain_best') || '0');
+  const newBest = Math.max(best, chainLength);
+  if (chainLength > best) localStorage.setItem('wordchain_best', chainLength);
+  document.getElementById('bestDisplay').textContent = newBest;
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('submitBtn').addEventListener('click', submitWord);
+document.getElementById('wordInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitWord(); });
+
+// Init
+document.getElementById('bestDisplay').textContent = localStorage.getItem('wordchain_best') || '0';
+startGame();
+</script>
+</body>
+</html>
